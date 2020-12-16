@@ -8,7 +8,8 @@ from trio_cdp import open_cdp, dom, page, target, generated, accessibility, sche
 
 
 # ССЫЛКА НА ДОКУМЕНТАЦИЮ: "https://py-cdp.readthedocs.io/en/latest/api/dom.html#commands" и
-# "https://chromedevtools.github.io/devtools-protocol/tot/DOM/"
+# "https://chromedevtools.github.io/devtools-protocol/tot/DOM/" и
+# "https://trio-cdp.readthedocs.io/en/latest/"
 
 
 def run_chrome():
