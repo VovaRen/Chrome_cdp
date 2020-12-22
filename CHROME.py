@@ -3,13 +3,15 @@ import json
 import requests
 import trio
 import time
+import win32api
+import win32con
+from ctypes.wintypes import tagPOINT
 from pywinauto import Application
-from trio_cdp import open_cdp, dom, page, target, generated, accessibility, schema
+from trio_cdp import open_cdp, dom, page, target, generated, accessibility, schema, css
 
 
 # ССЫЛКА НА ДОКУМЕНТАЦИЮ: "https://py-cdp.readthedocs.io/en/latest/api/dom.html#commands" и
-# "https://chromedevtools.github.io/devtools-protocol/tot/DOM/" и
-# "https://trio-cdp.readthedocs.io/en/latest/"
+# "https://chromedevtools.github.io/devtools-protocol/tot/DOM/"
 
 
 def run_chrome():
@@ -18,7 +20,7 @@ def run_chrome():
     kill_processes(pid)
     chrome_dir = r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
     chrome = Application(backend='uia')
-    chrome.start(chrome_dir + ' --remote-debugging-port=9222 --force-renderer-accessibility')
+    chrome.start(chrome_dir + ' --remote-debugging-port=9222 --force-renderer-accessibility --start-maximized')
     time.sleep(2)
 
 
@@ -59,20 +61,61 @@ async def dom_tree():
             async with session.wait_for(page.LoadEventFired):
                 await page.navigate(target_url)
 
-                # получаем всё деревно доступности
-                root_node = await accessibility.get_full_ax_tree()
+                # ПОКА НЕ РАЗОБРАЛСЯ С ОЖИДАНИЕМ ПОЛУЧЕНИЯ ВСЕХ ЭЛЕМЕНТОВ
+                time.sleep(10)
 
-                # корневой узел и поддерево
-                root_node1 = await dom.get_document(depth=-1)
-                print(root_node)
-                print(root_node1)
+                root_node6 = await accessibility.get_full_ax_tree()
+                roles_names_coords = []
+                for i in root_node6:
+                    roles_names_coords.append(i.role.value)
+                    if i.name:
+                        if i.name.value:
+                            roles_names_coords.append(i.name.value)
+                        else:
+                            roles_names_coords.append('NoName')
+                    if not i.name:
+                        roles_names_coords.append('NoName')
 
-                # html
-                html = await dom.get_outer_html()
-                print(html)
+                    # БЛОК ЗНАЧЕНИЙ (МОЖЕТ ПОНАДОБИТСЯ)
+                    # if i.name:
+                    #     if i.name.sources:
+                    #         if len(i.name.sources) > 2:
+                    #             if i.name.sources[2].value:
+                    #                 roles_names_coords.append(i.name.sources[2].value.value)
+                    #             else:
+                    #                 roles_names_coords.append('NoValue')
+                    #     else:
+                    #         roles_names_coords.append('NoValue')
+                    # if not i.name:
+                    #     roles_names_coords.append('NoValue')
+
+                    if i.backend_dom_node_id:
+                        q = await generated.dom.get_box_model(backend_node_id=i.backend_dom_node_id)
+                        roles_names_coords.append((q.content[0] + q.content[2])/2)
+                        roles_names_coords.append((q.content[1] + q.content[5])/2)
+                    else:
+                        roles_names_coords.append('NoCordX')
+                        roles_names_coords.append('NoCordY')
+                elements_list = (list(zip(*[iter(roles_names_coords)] * 4)))
+                for element in set(elements_list):
+                    if element[0] == 'link':
+                        print(element)
+
+                        # TODO - координаты смещаются из-за заголовка chrome
+                        if element[1] == 'Go':
+                            chrome = Application(backend='uia').connect(
+                                title='Паттерны проектирования на Python - Google Chrome')
+                            window_chrome = chrome.window()
+                            window_chrome.set_focus()
+                            point = tagPOINT(int(element[2]), int(element[3]) + 70)
+                            win32api.SetCursorPos((point.x, point.y))
+                            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, int(element[2]),
+                                                 int(element[3]), 0, 0)
+                            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, int(element[2]),
+                                                 int(element[3]), 0, 0)
 
 
 if __name__ == '__main__':
-    run_chrome()
+    # run_chrome()
     ws_url_val()
     trio.run(dom_tree, restrict_keyboard_interrupt_to_checkpoints=True)
